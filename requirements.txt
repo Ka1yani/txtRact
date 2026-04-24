@@ -5,3 +5,5 @@ pymupdf
 psycopg2-binary
 python-dotenv
 pydantic
+streamlit
+requests
