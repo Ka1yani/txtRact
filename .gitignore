@@ -1,0 +1,22 @@
+# Environments
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment Variables
+.env
+
+# Temporary files created by FastAPI upload
+temp_*.pdf
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
