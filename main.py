@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from database import init_db
-from api.routers import documents, search
+from api.routers import documents, search, sandbox
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,6 +35,7 @@ app = FastAPI(
 # Connect Feature Routers (Modularity via FastAPI Routers)
 app.include_router(documents.router)
 app.include_router(search.router)
+app.include_router(sandbox.router)
 
 @app.get("/", include_in_schema=False)
 async def root():
