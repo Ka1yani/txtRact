@@ -9,14 +9,16 @@ class SearchService:
     """
     
     @staticmethod
-    def execute_search(query: str) -> Dict[str, Any]:
+    async def execute_search(query: str) -> Dict[str, Any]:
         """
         Detects user intent (e.g. specific page vs standard text search) 
         and routes it to the appropriate database functionality.
         """
         # Intelligently detect if the user asked for a specific page using Regex
         page_match = re.search(r"page\s+(\d+)", query.lower())
-        doc_match = re.search(r"document\s+([\w\-\.]+)", query.lower())
+        
+        # Matches "document [name]", "of [name]", or "from [name]"
+        doc_match = re.search(r"(?:document|of|from)\s+([\w\-\.]+)", query.lower())
         
         if page_match:
             # Intent: Specific page query
@@ -29,7 +31,7 @@ class SearchService:
                 if doc_name.endswith('.'):
                     doc_name = doc_name[:-1]
             
-            results = search_by_page_number(page_number, document_name=doc_name)
+            results = await search_by_page_number(page_number, document_name=doc_name)
             
             intent_msg = f"Fetch entire content of page {page_number}"
             if doc_name:
@@ -42,5 +44,5 @@ class SearchService:
             }
             
         # Fallback: Default text keyword search
-        results = search_database(query)
+        results = await search_database(query)
         return {"query": query, "results": results}

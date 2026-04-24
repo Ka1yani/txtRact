@@ -7,3 +7,10 @@ python-dotenv
 pydantic
 streamlit
 requests
+sqlalchemy
+asyncpg
+celery
+redis
+pytest
+pytest-asyncio
+httpx

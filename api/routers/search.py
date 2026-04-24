@@ -19,6 +19,6 @@ async def search(
         raise HTTPException(status_code=400, detail="Query parameter 'q' is required.")
         
     try:
-        return service.execute_search(q)
+        return await service.execute_search(q)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

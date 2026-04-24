@@ -14,8 +14,8 @@ async def lifespan(app: FastAPI):
     """
     # System Startup
     try:
-        init_db()
-        print("Database initialized successfully.")
+        await init_db()
+        print("Database Schema initialized via Async ORM.")
     except Exception as e:
         print(f"Error initializing DB: {e}")
         
