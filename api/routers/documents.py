@@ -21,7 +21,26 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
         
     try:
-        filename = service.process_and_store_upload(file)
-        return {"status": "success", "message": f"{filename} processed and indexed successfully."}
+        result = service.process_and_store_upload(file)
+        return {
+            "status": "accepted", 
+            "message": f"Processing of {result['document_name']} has been queued.",
+            "task_id": result["task_id"]
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing document: {str(e)}")
+
+@router.get("/status/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Checks the status of a specific background document processing task.
+    """
+    from services.worker import celery_app
+    task_result = celery_app.AsyncResult(task_id)
+    
+    return {
+        "task_id": task_id,
+        "status": task_result.status,
+        "result": task_result.result if task_result.ready() else None
+    }
+
