@@ -98,7 +98,7 @@ async def search_database(query: str):
     """Asynchronous Fast Full-Text SQL GIN Search"""
     async with AsyncSessionLocal() as session:
         sql = """
-            SELECT dp.id, d.filename as document_name, d.raw_metadata as metadata, dp.page_number, dp.page_content as page_text,
+            SELECT dp.id, d.filename as document_name, d.author, d.creation_date, d.raw_metadata as metadata, dp.page_number, dp.page_content as page_text,
                    ts_rank(dp.search_vector, websearch_to_tsquery('english', :query)) AS rank
             FROM core_document_pages dp
             JOIN core_documents d ON dp.document_id = d.id
@@ -115,7 +115,7 @@ async def search_by_page_number(page_number: int, document_name: str = None):
     async with AsyncSessionLocal() as session:
         if document_name:
             sql = """
-                SELECT dp.id, d.filename as document_name, d.raw_metadata as metadata, dp.page_number, dp.page_content as page_text,
+                SELECT dp.id, d.filename as document_name, d.author, d.creation_date, d.raw_metadata as metadata, dp.page_number, dp.page_content as page_text,
                        1.0 AS rank
                 FROM core_document_pages dp
                 JOIN core_documents d ON dp.document_id = d.id
@@ -125,7 +125,7 @@ async def search_by_page_number(page_number: int, document_name: str = None):
             result = await session.execute(text(sql), {"page_number": page_number, "filename": f"%{document_name}%"})
         else:
             sql = """
-                SELECT dp.id, d.filename as document_name, d.raw_metadata as metadata, dp.page_number, dp.page_content as page_text,
+                SELECT dp.id, d.filename as document_name, d.author, d.creation_date, d.raw_metadata as metadata, dp.page_number, dp.page_content as page_text,
                        1.0 AS rank
                 FROM core_document_pages dp
                 JOIN core_documents d ON dp.document_id = d.id

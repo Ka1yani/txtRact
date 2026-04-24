@@ -56,6 +56,24 @@ st.markdown("""
         white-space: pre-wrap; /* Maintains newline formatting from extraction */
         word-wrap: break-word;
     }
+    .highlight {
+        background-color: #FCD34D;
+        color: #1E293B;
+        font-weight: 700;
+        padding: 0px 4px;
+        border-radius: 4px;
+    }
+    .meta-badge {
+        display: inline-block;
+        background-color: #334155;
+        color: #94A3B8;
+        font-size: 0.85rem;
+        padding: 4px 10px;
+        border-radius: 20px;
+        margin-right: 8px;
+        margin-bottom: 12px;
+        border: 1px solid #475569;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -150,16 +168,36 @@ with col2:
                         if not results:
                             st.warning("No matches found in the database. Ensure the document has been uploaded.")
                         else:
+                            import html
+                            import re
+                            
                             # Render Cards
                             for res in results:
+                                # 1. Escape HTML so that < and > characters in the PDF don't break the Markdown div rendering
+                                safe_text = html.escape(res['page_text'])
+                                
+                                # 2. Highlight Keywords if it's a general search
+                                terms = search_query.split()
+                                for term in terms:
+                                    if len(term) > 3 and term.lower() not in ['page', 'document', 'from', 'the', 'and', 'with']:
+                                        pattern = re.compile(re.escape(term), re.IGNORECASE)
+                                        safe_text = pattern.sub(lambda m: f'<span class="highlight">{m.group(0)}</span>', safe_text)
+                                        
+                                # 3. Format badges
+                                author = html.escape(res.get("author") or "Unknown Author")
+                                c_date = html.escape(res.get("creation_date") or "Unknown Date")
+                                author_badge = f'<span class="meta-badge">👤 {author}</span>'
+                                date_badge = f'<span class="meta-badge">📅 {c_date}</span>'
+
                                 with st.container():
                                     st.markdown(f"""
                                     <div class="result-card">
                                         <div class="result-header">📑 {res['document_name']} — (Page {res['page_number']})</div>
-                                        <div class="result-text">{res['page_text']}</div>
+                                        <div>{author_badge} {date_badge}</div>
+                                        <div class="result-text">{safe_text}</div>
                                     </div>
                                     """, unsafe_allow_html=True)
-                                    with st.expander("Show Document Metadata Object"):
+                                    with st.expander("Show Raw DB Metadata Object"):
                                         st.json(res['metadata'])
                     else:
                         st.error("Error retrieving search results from the database.")
