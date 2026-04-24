@@ -1,5 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from services.document_service import DocumentService
+from services.worker import task_status_store
 
 # Utilizing APIRouter for structural organization
 router = APIRouter(tags=["documents"])
@@ -10,21 +11,22 @@ def get_document_service() -> DocumentService:
 
 @router.post("/upload")
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    service: DocumentService = Depends(get_document_service)
+    service: DocumentService = Depends(get_document_service),
 ):
     """
     Endpoint strictly responsible for handling the API Request/Response.
-    Delegates all heavy lifting to the injected DocumentService.
+    Delegates all heavy lifting to the injected DocumentService with background tasks.
     """
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
         
     try:
-        result = service.process_and_store_upload(file)
+        result = service.process_and_store_upload(file, background_tasks)
         return {
             "status": "accepted", 
-            "message": f"Processing of {result['document_name']} has been queued.",
+            "message": f"Processing of {result['document_name']} has been started in the background.",
             "task_id": result["task_id"]
         }
     except Exception as e:
@@ -34,13 +36,14 @@ async def upload_document(
 async def get_task_status(task_id: str):
     """
     Checks the status of a specific background document processing task.
+    Reads from the local in-memory task_status_store.
     """
-    from services.worker import celery_app
-    task_result = celery_app.AsyncResult(task_id)
+    status = task_status_store.get(task_id)
     
+    if status is None:
+        raise HTTPException(status_code=404, detail="Task ID not found.")
+        
     return {
         "task_id": task_id,
-        "status": task_result.status,
-        "result": task_result.result if task_result.ready() else None
+        "status": status
     }
-

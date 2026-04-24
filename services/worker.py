@@ -1,37 +1,25 @@
 import os
-from celery import Celery
 from extractor import process_pdf
-from database import SYNC_DATABASE_URL
 
-# Configure Celery to use Redis as the message broker
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# In-memory store for task statuses (Redis-less implementation)
+# Note: In a multi-worker production environment (Gunicorn), 
+# this would need to be moved to a shared DB state.
+task_status_store = {}
 
-celery_app = Celery(
-    "worker",
-    broker=REDIS_URL,
-    backend=REDIS_URL
-)
-
-# Standard Celery configuration for document processing tasks
-celery_app.conf.update(
-    task_serializer='json',
-    accept_content=['json'],
-    result_serializer='json',
-    task_track_started=True,
-    task_ignore_result=False
-)
-
-@celery_app.task(name="process_document_task")
-def process_document_task(file_path: str, document_name: str):
+def process_document_bg(task_id: str, file_path: str, document_name: str):
     """
-    Background task to process a PDF and index it in the database.
+    Background worker logic for FastAPI BackgroundTasks.
     """
     try:
+        task_status_store[task_id] = "processing"
         process_pdf(file_path, document_name)
-        # We delete the temp file here after successful processing in the background
+        
+        # Cleanup temporary file
         if os.path.exists(file_path):
             os.remove(file_path)
-        return {"status": "completed", "document": document_name}
+            
+        task_status_store[task_id] = "completed"
     except Exception as e:
-        # Maintain the file if it fails for debugging or cleanup elsewhere
-        return {"status": "failed", "error": str(e), "document": document_name}
+        task_status_store[task_id] = f"failed: {str(e)}"
+        # Log failure for visibility
+        print(f"Task {task_id} failed: {e}")

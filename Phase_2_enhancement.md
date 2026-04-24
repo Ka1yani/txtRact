@@ -28,13 +28,15 @@ The extraction logic is now a standalone Celery task.
 Temporary files are now deleted *inside* the background worker immediately after successful processing, ensuring the server disk remains clean even when handling large volumes of data.
 
 ## Running the Background System
-To enable the background processing, a Celery worker must be running alongside the FastAPI app. 
+With the Option B implementation, the background processing is now native to the FastAPI application. **No separate Redis server or Celery worker is required.** 
+
+The system utilizes FastAPI's `BackgroundTasks` to handle extraction on a separate thread within the same process. This significantly simplifies the deployment and local development setup for Windows.
 
 **Standard Execution Command:**
 ```bash
-celery -A services.worker.celery_app worker --loglevel=info -P solo
+uvicorn main:app --reload
 ```
-*(Note: `-P solo` is recommended for standard Windows environments)*.
+The application will automatically manage the in-memory task queue and process PDFs in parallel without blocking the main event loop.
 
 ## Next Steps
 In **Phase 3**, we will upgrade the Streamlit frontend to utilize the new `task_id` for real-time progress tracking and implement a high-fidelity document viewer.

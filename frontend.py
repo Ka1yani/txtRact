@@ -52,7 +52,9 @@ st.markdown("""
     .result-text {
         color: #CBD5E1;
         font-size: 1rem;
-        line-height: 1.5;
+        line-height: 1.6;
+        white-space: pre-wrap; /* Maintains newline formatting from extraction */
+        word-wrap: break-word;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -74,14 +76,48 @@ with col1:
     
     if st.button("Upload & Index", type="primary", use_container_width=True):
         if uploaded_file is not None:
-            with st.spinner("Extracting text and metadata..."):
+            with st.spinner("Uploading and starting background extraction..."):
                 try:
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
                     response = requests.post(f"{API_BASE_URL}/upload", files=files)
                     
                     if response.status_code == 200:
-                        st.success(f"Successfully processed and indexed **{uploaded_file.name}**!")
-                        st.balloons()
+                        data = response.json()
+                        task_id = data.get("task_id")
+                        st.success(f"File uploaded! Task ID: `{task_id}`")
+                        
+                        # Background Status Tracker
+                        status_placeholder = st.empty()
+                        progress_bar = st.progress(0)
+                        
+                        is_completed = False
+                        retry_count = 0
+                        while not is_completed and retry_count < 60:  # Timeout after 2 minutes
+                            import time
+                            time.sleep(2)
+                            
+                            status_resp = requests.get(f"{API_BASE_URL}/status/{task_id}")
+                            if status_resp.status_code == 200:
+                                status_data = status_resp.json()
+                                current_status = status_data.get("status")
+                                
+                                status_placeholder.info(f"Current Status: **{current_status.upper()}**")
+                                
+                                if current_status == "completed":
+                                    is_completed = True
+                                    status_placeholder.success("✅ Extraction and indexing complete!")
+                                    progress_bar.progress(100)
+                                    st.balloons()
+                                elif "failed" in current_status:
+                                    is_completed = True
+                                    status_placeholder.error(f"❌ Error during background processing: {current_status}")
+                                else:
+                                    progress_bar.progress(50)  # Simple indeterminate progress
+                            
+                            retry_count += 1
+                        
+                        if not is_completed:
+                            st.warning("The document is still processing in the background. You can check back later.")
                     else:
                         st.error(f"Error: {response.json().get('detail', 'Failed to upload')}")
                 except Exception as e:
@@ -120,7 +156,7 @@ with col2:
                                     st.markdown(f"""
                                     <div class="result-card">
                                         <div class="result-header">📑 {res['document_name']} — (Page {res['page_number']})</div>
-                                        <div class="result-text">{res['page_text'][:600]}...</div>
+                                        <div class="result-text">{res['page_text']}</div>
                                     </div>
                                     """, unsafe_allow_html=True)
                                     with st.expander("Show Document Metadata Object"):
