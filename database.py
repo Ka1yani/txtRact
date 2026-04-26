@@ -6,6 +6,9 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy import text
 from dotenv import load_dotenv
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -35,6 +38,7 @@ class Document(Base):
     author = Column(String, nullable=True)
     creation_date = Column(String, nullable=True)
     total_pages = Column(Integer, default=0)
+    file_size_bytes = Column(Integer, default=0)
     upload_status = Column(String, default="completed")
     raw_metadata = Column(JSONB, nullable=True)
     
@@ -54,18 +58,15 @@ class DocumentPage(Base):
 Index('idx_core_doc_pages_search', DocumentPage.search_vector, postgresql_using='gin')
 
 async def init_db():
-    """Drops old deprecated tables and syncs new Object-Relational Models."""
+    """Syncs new Object-Relational Models securely without destroying persistence."""
     async with async_engine.begin() as conn:
-        # Cleanup legacy tables if they exist
-        await conn.execute(text("DROP TABLE IF EXISTS document_pages CASCADE"))
-        await conn.execute(text("DROP TABLE IF EXISTS core_document_pages CASCADE"))
-        await conn.execute(text("DROP TABLE IF EXISTS core_documents CASCADE"))
         await conn.run_sync(Base.metadata.create_all)
 
 # ------------- Legacy Wrappers adapted to New Strict Normalised Schema -------------
 
 def insert_page(document_name: str, metadata: dict, page_number: int, page_text: str):
     """Synchronous strict DB insertion using Document and DocumentPage mapping."""
+    logger.debug(f"Attempting to insert Database record for '{document_name}', Page {page_number}")
     with SyncSessionLocal() as session:
         doc = session.query(Document).filter(Document.filename == document_name).first()
         if not doc:
@@ -75,12 +76,14 @@ def insert_page(document_name: str, metadata: dict, page_number: int, page_text:
                 filename=document_name,
                 author=author,
                 creation_date=creation_date,
+                file_size_bytes=metadata.get('file_size_bytes', 0),
                 raw_metadata=metadata,
                 total_pages=0
             )
             session.add(doc)
             session.commit()
             session.refresh(doc)
+            logger.info(f"Created new Database Document Head for '{document_name}'")
             
         if page_number > doc.total_pages:
             doc.total_pages = page_number
@@ -93,6 +96,23 @@ def insert_page(document_name: str, metadata: dict, page_number: int, page_text:
         )
         session.add(page)
         session.commit()
+        logger.debug(f"Page {page_number} for '{document_name}' successfully committed to DB.")
+
+async def resolve_document_filename(partial_name: str) -> str:
+    """Queries DB to resolve a partial filename to its exact filename (with extension)."""
+    async with AsyncSessionLocal() as session:
+        sql = "SELECT filename FROM core_documents WHERE filename ILIKE :partial LIMIT 1;"
+        result = await session.execute(text(sql), {"partial": f"%{partial_name}%"})
+        row = result.fetchone()
+        return row[0] if row else None
+
+async def get_all_documents():
+    """Retrieves all registered documents from the DB for cataloging."""
+    async with AsyncSessionLocal() as session:
+        sql = "SELECT filename, creation_date, file_size_bytes, total_pages FROM core_documents ORDER BY id DESC;"
+        result = await session.execute(text(sql))
+        rows = result.fetchall()
+        return [dict(row._mapping) for row in rows]
 
 async def search_database(query: str):
     """Asynchronous Fast Full-Text SQL GIN Search"""

@@ -12,3 +12,7 @@ asyncpg
 pytest
 pytest-asyncio
 httpx
+pandas
+openpyxl
+python-docx
+requests

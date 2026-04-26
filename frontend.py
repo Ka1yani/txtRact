@@ -96,16 +96,17 @@ def render_search_interface():
 
     # Left Column - Upload Document
     with col1:
-        st.subheader("📤 Upload Document")
-        st.write("Upload a PDF to extract and index its contents page-by-page into the PostgreSQL GIN database.")
+        st.subheader("📤 Upload Omni-Document")
+        st.write("Upload omni-format files (`.pdf`, `.docx`, `.txt`, `.csv`, `.xlsx`, `.png`, `.jpeg`) to extract and index their contents seamlessly into the PostgreSQL GIN database via the Strategy Factory.")
         
-        uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"], label_visibility="collapsed")
+        uploaded_file = st.file_uploader("Choose an Omni-Format file", type=["pdf", "docx", "txt", "csv", "xlsx", "png", "jpeg", "jpg"], label_visibility="collapsed")
         
         if st.button("Upload & Index", type="primary", use_container_width=True):
             if uploaded_file is not None:
-                with st.spinner("Uploading and starting background extraction..."):
+                with st.spinner("Uploading and starting background omni-extraction..."):
                     try:
-                        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")}
+                        # Ensure a generic fallback octet-stream representation if needed
+                        files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "application/octet-stream")}
                         response = requests.post(f"{API_BASE_URL}/upload", files=files)
                         
                         if response.status_code == 200:
@@ -272,9 +273,53 @@ def render_pipeline_visualizer():
     st.code("search_vector = Column(TSVECTOR, Computed(\"to_tsvector('english', page_content)\", persisted=True))", language="python")
     st.info("The document has now transitioned from an unstructured, visual PDF file into a deterministic, lightning-fast SQL object readable by the frontend.")
 
+import pandas as pd
+
+def format_size(size_bytes):
+    if size_bytes == 0:
+        return "0 B"
+    size_name = ("B", "KB", "MB", "GB")
+    import math
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    return f"{s} {size_name[i]}"
+
+def render_database_catalog():
+    st.markdown('<div class="main-title">Database Catalog 🗄️</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">View all locally indexed documents inside the system</div>', unsafe_allow_html=True)
+    st.divider()
+    
+    with st.spinner("Fetching document catalog from database..."):
+        try:
+            resp = requests.get(f"{API_BASE_URL}/documents/all")
+            if resp.status_code == 200:
+                docs = resp.json().get("documents", [])
+                if not docs:
+                    st.info("No documents have been uploaded or processed yet.")
+                else:
+                    df_data = []
+                    for d in docs:
+                        fname = d.get('filename', 'Unknown')
+                        ext = fname.split('.')[-1].upper() if '.' in fname else 'Unknown'
+                        df_data.append({
+                            "File Name": fname,
+                            "File Type": ext,
+                            "Date Uploaded": d.get('creation_date', 'Unknown'),
+                            "Size": format_size(d.get('file_size_bytes', 0)),
+                            "Total Pages": d.get('total_pages', 0)
+                        })
+                    
+                    df = pd.DataFrame(df_data)
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.error("Failed to fetch documents from database.")
+        except Exception as e:
+            st.error(f"Connection Error: {e}")
+
 # Sidebar Navigation Module
 st.sidebar.title("txtRact Navigation")
-page = st.sidebar.radio("Go to:", ["Search Application", "Pipeline Visualizer"])
+page = st.sidebar.radio("Go to:", ["Search Application", "Database Catalog", "Pipeline Visualizer"])
 
 st.sidebar.divider()
 st.sidebar.markdown(
@@ -290,5 +335,7 @@ st.sidebar.markdown(
 
 if page == "Search Application":
     render_search_interface()
+elif page == "Database Catalog":
+    render_database_catalog()
 else:
     render_pipeline_visualizer()
